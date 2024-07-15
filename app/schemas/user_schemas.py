@@ -42,7 +42,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     email: EmailStr = Field(..., example="john.doe@example.com")
     password: str = Field(..., min_length=8, example="Secure*1234")
-    nickname: constr(min_length=3, max_length=20)
+    nickname: Optional[str] = Field(None, min_length=3, max_length= 20, pattern=r'^[\w-]+$', example="john_doe_456")
 
     @validator('password')
     def password_complexity(cls, value):
