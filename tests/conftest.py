@@ -15,7 +15,7 @@ Fixtures:
 
 # Standard library imports
 from builtins import range
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -36,6 +36,8 @@ from app.utils.security import hash_password
 from app.utils.template_manager import TemplateManager
 from app.services.email_service import EmailService
 from app.services.jwt_service import create_access_token
+
+
 
 fake = Faker()
 
@@ -261,3 +263,55 @@ def user_response_data():
 @pytest.fixture
 def login_request_data():
     return {"username": "john_doe_123", "password": "SecurePassword123!"}
+
+@pytest.fixture
+async def user_token(db_session: AsyncSession, user: User):
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    token = create_access_token(
+        data={"sub": user.email, "role": str(user.role)}, 
+        expires_delta=access_token_expires
+    )
+    return token
+
+@pytest.fixture
+async def admin_token(db_session: AsyncSession, admin_user: User):
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    token = create_access_token(
+        data={"sub": admin_user.email, "role": str(admin_user.role)}, 
+        expires_delta=access_token_expires
+    )
+    return token
+
+@pytest.fixture
+async def manager_token(db_session: AsyncSession, manager_user: User):
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    token = create_access_token(
+        data={"sub": manager_user.email, "role": str(UserRole.MANAGER)}, 
+        expires_delta=access_token_expires
+    )
+    return token
+
+@pytest.fixture
+async def different_admin_user(db_session: AsyncSession):
+    user = User(
+        nickname="different_admin_user",
+        email="different_admin@example.com",
+        first_name="Different",
+        last_name="Admin",
+        hashed_password="securepassword",
+        role=UserRole.ADMIN,
+        is_locked=False,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    return user
+
+
+@pytest.fixture
+async def new_admin_token(db_session: AsyncSession, different_admin_user: User):
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    token = create_access_token(
+        data={"sub": different_admin_user.email, "role": UserRole.ADMIN.name},
+        expires_delta=access_token_expires
+    )
+    return token
