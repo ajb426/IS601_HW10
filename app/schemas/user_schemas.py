@@ -31,6 +31,8 @@ class UserBase(BaseModel):
     profile_picture_url: Optional[str] = Field(None, example="https://example.com/profiles/john.jpg")
     linkedin_profile_url: Optional[str] =Field(None, example="https://linkedin.com/in/johndoe")
     github_profile_url: Optional[str] = Field(None, example="https://github.com/johndoe")
+    role: Optional[UserRole] = Field(UserRole.AUTHENTICATED, example="AUTHENTICATED")
+    
 
     _validate_urls = validator('profile_picture_url', 'linkedin_profile_url', 'github_profile_url', pre=True, allow_reuse=True)(validate_url)
  
@@ -64,6 +66,7 @@ class UserUpdate(UserBase):
     linkedin_profile_url: Optional[str] =Field(None, example="https://linkedin.com/in/johndoe")
     github_profile_url: Optional[str] = Field(None, example="https://github.com/johndoe")
     password: Optional[constr(min_length=8)] = None
+    role: Optional[UserRole] = Field(UserRole.AUTHENTICATED, example="AUTHENTICATED")
 
     @validator('nickname')
     def nickname_characters(cls, value):
