@@ -1,5 +1,5 @@
 from builtins import ValueError, any, bool, str
-from pydantic import BaseModel, EmailStr, Field, validator, root_validator
+from pydantic import BaseModel, EmailStr, Field, validator, root_validator, constr
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -31,6 +31,8 @@ class UserBase(BaseModel):
     profile_picture_url: Optional[str] = Field(None, example="https://example.com/profiles/john.jpg")
     linkedin_profile_url: Optional[str] =Field(None, example="https://linkedin.com/in/johndoe")
     github_profile_url: Optional[str] = Field(None, example="https://github.com/johndoe")
+    role: Optional[UserRole] = Field(UserRole.AUTHENTICATED, example="AUTHENTICATED")
+    
 
     _validate_urls = validator('profile_picture_url', 'linkedin_profile_url', 'github_profile_url', pre=True, allow_reuse=True)(validate_url)
  
@@ -39,7 +41,20 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     email: EmailStr = Field(..., example="john.doe@example.com")
-    password: str = Field(..., example="Secure*1234")
+    password: str = Field(..., min_length=8, example="Secure*1234")
+    nickname: constr(min_length=3, max_length=20)
+
+    @validator('password')
+    def password_complexity(cls, value):
+        if not re.match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', value):
+            raise ValueError('Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.')
+        return value
+
+    @validator('nickname')
+    def nickname_characters(cls, value):
+        if not re.match(r'^[\w-]+$', value):
+            raise ValueError("Nickname must contain only alphanumeric characters, underscores, and hyphens.")
+        return value
 
 class UserUpdate(UserBase):
     email: Optional[EmailStr] = Field(None, example="john.doe@example.com")
@@ -50,6 +65,20 @@ class UserUpdate(UserBase):
     profile_picture_url: Optional[str] = Field(None, example="https://example.com/profiles/john.jpg")
     linkedin_profile_url: Optional[str] =Field(None, example="https://linkedin.com/in/johndoe")
     github_profile_url: Optional[str] = Field(None, example="https://github.com/johndoe")
+    password: Optional[constr(min_length=8)] = None
+    role: Optional[UserRole] = Field(UserRole.AUTHENTICATED, example="AUTHENTICATED")
+
+    @validator('nickname')
+    def nickname_characters(cls, value):
+        if value and not re.match(r'^[\w-]+$', value):
+            raise ValueError("Nickname must contain only alphanumeric characters, underscores, and hyphens.")
+        return value
+    
+    @validator('password')
+    def password_complexity(cls, value):
+        if value and not re.match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', value):
+            raise ValueError('Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.')
+        return value
 
     @root_validator(pre=True)
     def check_at_least_one_value(cls, values):
