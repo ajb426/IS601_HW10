@@ -1,3 +1,4 @@
+import re
 from builtins import Exception, bool, classmethod, int, str
 from datetime import datetime, timezone
 import secrets
@@ -20,7 +21,12 @@ from fastapi import HTTPException
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+def validate_password(cls, password: str):
+    if not re.match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', password):
+        raise HTTPException(status_code=400, detail='Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.')
+
 class UserService:
+
     @classmethod
     async def _execute_query(cls, session: AsyncSession, query):
         try:
@@ -63,7 +69,9 @@ class UserService:
             if existing_user_by_nickname:
                 logger.error("User with given nickname already exists.")
                 raise HTTPException(status_code=422, detail="User with given nickname already exists.")
-        
+
+            validate_password(validated_data['password'])
+
             validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
             new_user = User(**validated_data)
             new_user.verification_token = generate_verification_token()
