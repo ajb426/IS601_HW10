@@ -24,6 +24,13 @@ logger = logging.getLogger(__name__)
 def validate_password(cls, password: str):
     if not re.match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', password):
         raise HTTPException(status_code=400, detail='Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.')
+    
+def validate_nickname(nickname: str):
+    if not re.match(r'^[\w-]+$', nickname):
+        raise HTTPException(
+            status_code=400,
+            detail="Nickname must contain only alphanumeric characters, underscores, and hyphens."
+        )
 
 class UserService:
 
@@ -70,6 +77,7 @@ class UserService:
                 logger.error("User with given nickname already exists.")
                 raise HTTPException(status_code=422, detail="User with given nickname already exists.")
 
+            validate_nickname(validated_data['nickname'])
             validate_password(validated_data['password'])
 
             validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
@@ -88,11 +96,27 @@ class UserService:
     @classmethod
     async def update(cls, session: AsyncSession, user_id: UUID, update_data: Dict[str, str]) -> Optional[User]:
         try:
-            # validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
             validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
 
+            if 'email' in validated_data:
+                existing_user = await cls.get_by_email(session, validated_data['email'])
+                if existing_user and existing_user.id != user_id:
+                    logger.error("User with given email already exists.")
+                    raise HTTPException(status_code=422, detail="User with given email already exists.")
+
+            if 'nickname' in validated_data:
+                existing_user = await cls.get_by_nickname(session, validated_data['nickname'])
+                if existing_user and existing_user.id != user_id:
+                    logger.error("User with given nickname already exists.")
+                    raise HTTPException(status_code=422, detail="User with given nickname already exists.")
+
+            validate_nickname(validated_data['nickname'])
+
             if 'password' in validated_data:
-                validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
+                password = validated_data.pop('password')
+                validate_password(password)  # Validate the password
+                validated_data['hashed_password'] = hash_password(password)
+            
             query = update(User).where(User.id == user_id).values(**validated_data).execution_options(synchronize_session="fetch")
             await cls._execute_query(session, query)
             updated_user = await cls.get_by_id(session, user_id)

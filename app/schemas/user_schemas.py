@@ -63,11 +63,18 @@ class UserUpdate(UserBase):
     profile_picture_url: Optional[str] = Field(None, example="https://example.com/profiles/john.jpg")
     linkedin_profile_url: Optional[str] =Field(None, example="https://linkedin.com/in/johndoe")
     github_profile_url: Optional[str] = Field(None, example="https://github.com/johndoe")
+    password: Optional[constr(min_length=8)] = None
 
     @validator('nickname')
     def nickname_characters(cls, value):
         if value and not re.match(r'^[\w-]+$', value):
             raise ValueError("Nickname must contain only alphanumeric characters, underscores, and hyphens.")
+        return value
+    
+    @validator('password')
+    def password_complexity(cls, value):
+        if value and not re.match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', value):
+            raise ValueError('Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.')
         return value
 
     @root_validator(pre=True)
