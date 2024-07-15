@@ -1,9 +1,14 @@
 from builtins import range
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 from app.dependencies import get_settings
 from app.models.user_model import User
+from app.schemas.user_schemas import UserCreate
 from app.services.user_service import UserService
+from app.services.email_service import EmailService
+from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.asyncio
 
@@ -12,20 +17,32 @@ async def test_create_user_with_valid_data(db_session, email_service):
     user_data = {
         "email": "valid_user@example.com",
         "password": "ValidPassword123!",
+        "nickname": "test_nickname_123"
     }
     user = await UserService.create(db_session, user_data, email_service)
     assert user is not None
     assert user.email == user_data["email"]
 
 # Test creating a user with invalid data
-async def test_create_user_with_invalid_data(db_session, email_service):
-    user_data = {
-        "nickname": "",  # Invalid nickname
-        "email": "invalidemail",  # Invalid email
-        "password": "short",  # Invalid password
+@pytest.mark.asyncio
+async def test_user_create_validation_errors(db_session: AsyncSession, email_service: EmailService):
+    invalid_user_data = {
+        "email": "invalidemail",
+        "password": "short",
+        "nickname": ""
     }
-    user = await UserService.create(db_session, user_data, email_service)
-    assert user is None
+
+    with pytest.raises(HTTPException) as exc_info:
+        await UserService.create(db_session, invalid_user_data, email_service)
+    
+    assert exc_info.value.status_code == 422
+    assert "Validation error" in exc_info.value.detail
+    assert "email" in exc_info.value.detail
+    assert "value is not a valid email address" in exc_info.value.detail
+    assert "nickname" in exc_info.value.detail
+    assert "String should have at least 3 characters" in exc_info.value.detail
+    assert "password" in exc_info.value.detail
+    assert "String should have at least 8 characters" in exc_info.value.detail
 
 # Test fetching a user by ID when the user exists
 async def test_get_by_id_user_exists(db_session, user):
@@ -66,9 +83,18 @@ async def test_update_user_valid_data(db_session, user):
     assert updated_user.email == new_email
 
 # Test updating a user with invalid data
-async def test_update_user_invalid_data(db_session, user):
-    updated_user = await UserService.update(db_session, user.id, {"email": "invalidemail"})
-    assert updated_user is None
+async def test_update_user_invalid_data(db_session: AsyncSession, user):
+    invalid_update_data = {
+        "email": "invalidemail"
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        await UserService.update(db_session, user.id, invalid_update_data)
+    
+    assert exc_info.value.status_code == 422
+    assert "Validation error" in exc_info.value.detail
+    assert "email" in exc_info.value.detail
+    assert "value is not a valid email address" in exc_info.value.detail
 
 # Test deleting a user who exists
 async def test_delete_user_exists(db_session, user):
@@ -94,19 +120,28 @@ async def test_register_user_with_valid_data(db_session, email_service):
     user_data = {
         "email": "register_valid_user@example.com",
         "password": "RegisterValid123!",
+        "nickname": "valid-nickname_123"
     }
     user = await UserService.register_user(db_session, user_data, email_service)
     assert user is not None
     assert user.email == user_data["email"]
 
 # Test attempting to register a user with invalid data
-async def test_register_user_with_invalid_data(db_session, email_service):
-    user_data = {
+async def test_register_user_with_invalid_data(db_session: AsyncSession, email_service):
+    invalid_user_data = {
         "email": "registerinvalidemail",  # Invalid email
         "password": "short",  # Invalid password
+        "nickname": "contain$-ill*g@l"  # Invalid nickname
     }
-    user = await UserService.register_user(db_session, user_data, email_service)
-    assert user is None
+
+    with pytest.raises(HTTPException) as exc_info:
+        await UserService.register_user(db_session, invalid_user_data, email_service)
+    
+    assert exc_info.value.status_code == 422
+    assert "Validation error" in exc_info.value.detail
+    assert "email" in exc_info.value.detail
+    assert "nickname" in exc_info.value.detail
+    assert "password" in exc_info.value.detail
 
 # Test successful user login
 async def test_login_user_successful(db_session, verified_user):
