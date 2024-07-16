@@ -9,6 +9,7 @@ from app.services.user_service import UserService
 from app.services.email_service import EmailService
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import uuid4
 
 pytestmark = pytest.mark.asyncio
 
@@ -191,3 +192,115 @@ async def test_unlock_user_account(db_session, locked_user):
     assert unlocked, "The account should be unlocked"
     refreshed_user = await UserService.get_by_id(db_session, locked_user.id)
     assert not refreshed_user.is_locked, "The user should no longer be locked"
+
+@pytest.mark.asyncio
+async def test_create_user_with_existing_email(db_session: AsyncSession, email_service: EmailService):
+    # Arrange: Add a user to the session to simulate an existing user with the same email
+    existing_user = User(
+        nickname="existing_user",
+        email="test@example.com",
+        first_name="Existing",
+        last_name="User",
+        hashed_password="hashedpassword",
+        role="AUTHENTICATED",
+        is_locked=False,
+        email_verified=True,
+    )
+    db_session.add(existing_user)
+    await db_session.commit()
+
+    # Prepare the user data with the same email
+    user_data = {
+        "nickname": "new_user",
+        "email": "test@example.com",
+        "first_name": "New",
+        "last_name": "User",
+        "password": "Newpassowrd123!"
+    }
+
+    # Act & Assert: Try to create a new user with the same email and expect an HTTPException
+    with pytest.raises(HTTPException) as exc_info:
+        await UserService.create(db_session, user_data, email_service)
+    
+    # Assert: Ensure the exception is raised with the correct status code and detail
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "User with given email already exists."
+
+@pytest.mark.asyncio
+async def test_create_user_with_existing_nickname(db_session: AsyncSession, email_service: EmailService):
+    # Arrange: Add a user to the session to simulate an existing user with the same nickname
+    existing_user = User(
+        nickname="existing_nickname",
+        email="existing@example.com",
+        first_name="Existing",
+        last_name="User",
+        hashed_password="hashedpassword",
+        role="AUTHENTICATED",
+        is_locked=False,
+        email_verified=True
+    )
+    db_session.add(existing_user)
+    await db_session.commit()
+
+    # Prepare the user data with the same nickname
+    user_data = {
+        "nickname": "existing_nickname",
+        "email": "new@example.com",
+        "first_name": "New",
+        "last_name": "User",
+        "password": "Newpassowrd123!"
+    }
+
+    # Act & Assert: Try to create a new user with the same nickname and expect an HTTPException
+    with pytest.raises(HTTPException) as exc_info:
+        await UserService.create(db_session, user_data, email_service)
+    
+    # Assert: Ensure the exception is raised with the correct status code and detail
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "User with given nickname already exists."
+
+    @pytest.mark.asyncio
+    async def test_update_user_with_existing_email(db_session: AsyncSession):
+    # Arrange: Add an existing user with the same email to the session
+        existing_user = User(
+            id=uuid4(),
+            nickname="existing_user",
+            email="existing@example.com",
+            first_name="Existing",
+            last_name="User",
+            hashed_password="hashedpassword",
+            role="AUTHENTICATED",
+            is_locked=False,
+            email_verified=True
+        )
+        db_session.add(existing_user)
+        await db_session.commit()
+
+        # Add another user that will be updated
+        user_to_update = User(
+            id=uuid4(),
+            nickname="user_to_update",
+            email="update@example.com",
+            first_name="Update",
+            last_name="User",
+            hashed_password="hashedpassword",
+            role="AUTHENTICATED",
+            is_locked=False,
+            email_verified=True
+        )
+        db_session.add(user_to_update)
+        await db_session.commit()
+
+        # Prepare the update data with the existing email
+        update_data = {
+            "email": "existing@example.com"
+        }
+
+    # Act & Assert: Try to update the user with the existing email and expect an HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await UserService.update(db_session, user_to_update.id, update_data)
+    
+        # Assert: Ensure the exception is raised with the correct status code and detail
+        assert exc_info.value.status_code == 422
+        assert exc_info.value.detail == "User with given email already exists."
+        
